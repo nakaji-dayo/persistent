@@ -71,6 +71,8 @@ library
                      CompositeTest
                      Init
                      PrimaryTest
+                     CustomPersistField
+                     CustomPersistFieldTest
 
                      Database.Persist
                      Database.Persist.Quasi
