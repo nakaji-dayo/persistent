@@ -35,6 +35,7 @@ import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
 import System.Environment (getEnvironment)
 import Data.Acquire (Acquire, mkAcquire, with)
+import Data.Monoid ((<>))
 
 import Data.Conduit
 import qualified Blaze.ByteString.Builder.Char8 as BBB
@@ -57,6 +58,7 @@ import qualified Database.MySQL.Base.Types    as MySQLBase
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (runResourceT)
 
+import Debug.Trace (trace)
 
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
@@ -82,7 +84,7 @@ createMySQLPool :: (MonadBaseControl IO m, MonadIO m, MonadLogger m) =>
                 -> Int
                 -- ^ Number of connections to be kept open in the pool.
                 -> m ConnectionPool
-createMySQLPool ci = createSqlPool $ open' ci
+createMySQLPool ci = createSqlPool $ open' (trace ("create mysql pool ci: " ++ (show ci)) ci)
 
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
@@ -284,7 +286,7 @@ migrate' :: MySQL.ConnectInfo
 migrate' connectInfo allDefs getter val = do
     let name = entityDB val
     (idClmn, old) <- getColumns connectInfo getter val
-    let (newcols, udefs, fdefs) = mkColumns allDefs val
+    let (newcols, udefs, fdefs) = mkColumns (trace ("allDefs: " ++ (show allDefs)) allDefs) val
     let udspair = map udToPair udefs
     case (idClmn, old, partitionEithers old) of
       -- Nothing found, create everything
@@ -328,14 +330,26 @@ addTable cols entity = AddTable $ concat
            , "("
            , idtxt
            , if null cols then [] else ","
-           , intercalate "," $ map showColumn cols
+           , intercalate "," $ map showColumn (trace ("addTable cols: " ++ (show cols)) cols)
            , ")"
            ]
     where
       name = entityDB entity
-      idtxt = case entityPrimary entity of
+      idtxt = case (trace ("DEBUG primary entity : " ++ show entity) entityPrimary entity) of
                 Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeDBName . fieldDB) $ compositeFields pdef, ")"]
-                Nothing   -> concat [escapeDBName $ fieldDB $ entityId entity, " BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"]
+                Nothing   ->
+                    let defText = defaultAttribute $ fieldAttrs $ entityId entity
+                        sType = fieldSqlType $ entityId entity
+                        autoIncrementText = case (sType, defText) of
+                            (SqlInt64, Nothing)  -> " AUTO_INCREMENT"
+                            _ -> ""
+                        maxlenAttr = find ((T.isPrefixOf "maxlen=") . T.toLower) (fieldAttrs (entityId entity))
+                        maxlen = maxlenAttr >>= readMaybe . T.unpack . T.drop 7 
+                    in concat [escapeDBName $ fieldDB $ entityId entity
+                            , " " <> showSqlType sType maxlen False
+                            , " NOT NULL"
+                            , autoIncrementText
+                            ," PRIMARY KEY"]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> DBName -> DBName -> (DBName, FieldType)
