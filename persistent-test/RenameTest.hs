@@ -7,8 +7,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
 #endif
-import Data.Time (getCurrentTime)
-import Data.Time (Day, UTCTime(..))
+import Data.Time (getCurrentTime, Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Aeson
