@@ -7,9 +7,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource (runResourceT)
 #endif
-#ifndef WITH_MYSQL
 import Data.Time (getCurrentTime)
-#endif
 import Data.Time (Day, UTCTime(..))
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -76,7 +74,6 @@ specs = describe "rename specs" $ do
             runResourceT $ rawQuery "SELECT something_else from ref_table WHERE id=4" [] C.$$ CL.sinkNull
 #endif
 
-#ifndef WITH_MYSQL
     it "user specified id, insertKey, no default=" $ db $ do
       let rec2 = IdTable "Foo2" Nothing
       let rec1 = IdTable "Foo1" $ Just rec2
@@ -84,18 +81,22 @@ specs = describe "rename specs" $ do
       now <- liftIO getCurrentTime
       let key = IdTableKey $ utctDay now
       insertKey key rec
-      Just rec' <- get key
-      rec' @== rec
+      mrec <- get key
+      case mrec of
+        Just rec' -> rec' @== rec
+        Nothing -> liftIO $ assertFailure "Record is not exists"
 
 #  ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do
       let rec = IdTable "Foo" Nothing
       k <- insert rec
-      Just rec' <- get k
-      rec' @== rec
+      mrec <- get k
+      case mrec of
+        Just rec' -> rec' @== rec
+        Nothing -> liftIO $ assertFailure "Record is not exists"
+
 #  endif
-#endif
 
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
