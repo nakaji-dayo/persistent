@@ -81,22 +81,21 @@ specs = describe "rename specs" $ do
       now <- liftIO getCurrentTime
       let key = IdTableKey $ utctDay now
       insertKey key rec
-      mrec <- get key
-      case mrec of
-        Just rec' -> rec' @== rec
-        Nothing -> liftIO $ assertFailure "Record is not exists"
+      Just rec' <- get key
+      rec' @== rec
+      (Entity key' _):_ <- selectList ([] :: [Filter IdTable]) []
+      key' @== key
 
+#ifndef WITH_MYSQL
 #  ifndef WITH_NOSQL
     -- this uses default=
     it "user specified id, default=" $ db $ do
       let rec = IdTable "Foo" Nothing
       k <- insert rec
-      mrec <- get k
-      case mrec of
-        Just rec' -> rec' @== rec
-        Nothing -> liftIO $ assertFailure "Record is not exists"
-
+      Just rec' <- get k
+      rec' @== rec
 #  endif
+#endif
 
     it "extra blocks" $
         entityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
